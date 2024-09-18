@@ -1,21 +1,21 @@
 import torch
-from models.resnet_simclr import ResNetSimCLR
-from torch.utils.tensorboard import SummaryWriter
-import torch.nn.functional as F
-from loss.nt_xent import NTXentLoss
+from models.resnet_simclr import resnetsimclr
+from torch.utils.tensorboard import summarywriter
+import torch.nn.functional as f
+from loss.nt_xent import ntxentloss
 import os
 import shutil
 import sys
 
-apex_support = False
+apex_support = false
 try:
     sys.path.append('./apex')
     from apex import amp
 
-    apex_support = True
+    apex_support = true
 except:
-    print("Please install apex for mixed precision training from: https://github.com/NVIDIA/apex")
-    apex_support = False
+    print("please install apex for mixed precision training from: https://github.com/nvidia/apex")
+    apex_support = false
 
 import numpy as np
 
@@ -28,31 +28,31 @@ def _save_config_file(model_checkpoints_folder):
         shutil.copy('./config.yaml', os.path.join(model_checkpoints_folder, 'config.yaml'))
 
 
-class SimCLR(object):
+class simclr(object):
 
     def __init__(self, dataset, config):
         self.config = config
         self.device = self._get_device()
-        self.writer = SummaryWriter()
+        self.writer = summarywriter()
         self.dataset = dataset
-        self.nt_xent_criterion = NTXentLoss(self.device, config['batch_size'], **config['loss'])
+        self.nt_xent_criterion = ntxentloss(self.device, config['batch_size'], **config['loss'])
 
     def _get_device(self):
         device = 'cuda' if torch.cuda.is_available() else 'cpu'
-        print("Running on:", device)
+        print("running on:", device)
         return device
 
     def _step(self, model, xis, xjs, n_iter):
 
         # get the representations and the projections
-        ris, zis = model(xis)  # [N,C]
+        ris, zis = model(xis)  # [n,c]
 
         # get the representations and the projections
-        rjs, zjs = model(xjs)  # [N,C]
+        rjs, zjs = model(xjs)  # [n,c]
 
         # normalize projection feature vectors
-        zis = F.normalize(zis, dim=1)
-        zjs = F.normalize(zjs, dim=1)
+        zis = f.normalize(zis, dim=1)
+        zjs = f.normalize(zjs, dim=1)
 
         loss = self.nt_xent_criterion(zis, zjs)
         return loss
@@ -61,27 +61,27 @@ class SimCLR(object):
 
         train_loader, valid_loader = self.dataset.get_data_loaders()
 
-        model = ResNetSimCLR(**self.config["model"])# .to(self.device)
+        model = resnetsimclr(**self.config["model"])# .to(self.device)
         if self.config['n_gpu'] > 1:
             device_n = len(eval(self.config['gpu_ids']))
-            model = torch.nn.DataParallel(model, device_ids=range(device_n))
+            model = torch.nn.dataparallel(model, device_ids=range(device_n))
         model = self._load_pre_trained_weights(model)
         model = model.to(self.device)
             
 
-        optimizer = torch.optim.Adam(model.parameters(), 1e-5, weight_decay=eval(self.config['weight_decay']))
+        optimizer = torch.optim.adam(model.parameters(), 1e-5, weight_decay=eval(self.config['weight_decay']))
 
-#         scheduler = torch.optim.lr_scheduler.CosineAnnealingLR(optimizer, T_max=len(train_loader), eta_min=0,
+#         scheduler = torch.optim.lr_scheduler.cosineannealinglr(optimizer, t_max=len(train_loader), eta_min=0,
 #                                                                last_epoch=-1)
         
-        scheduler = torch.optim.lr_scheduler.CosineAnnealingLR(optimizer, T_max=self.config['epochs'], eta_min=0,
+        scheduler = torch.optim.lr_scheduler.cosineannealinglr(optimizer, t_max=self.config['epochs'], eta_min=0,
                                                                last_epoch=-1)
         
 
         if apex_support and self.config['fp16_precision']:
             model, optimizer = amp.initialize(model, optimizer,
-                                              opt_level='O2',
-                                              keep_batchnorm_fp32=True)
+                                              opt_level='o2',
+                                              keep_batchnorm_fp32=true)
 
         model_checkpoints_folder = os.path.join(self.writer.log_dir, 'checkpoints')
 
@@ -135,9 +135,9 @@ class SimCLR(object):
             checkpoints_folder = os.path.join('./runs', self.config['fine_tune_from'], 'checkpoints')
             state_dict = torch.load(os.path.join(checkpoints_folder, 'model.pth'))
             model.load_state_dict(state_dict)
-            print("Loaded pre-trained model with success.")
-        except FileNotFoundError:
-            print("Pre-trained weights not found. Training from scratch.")
+            print("loaded pre-trained model with success.")
+        except filenotfounderror:
+            print("pre-trained weights not found. training from scratch.")
 
         return model
 
